@@ -89,8 +89,6 @@ void checkPIN() {
   if (strcmp(enteredPIN, correctPIN) == 0) { // Membandingkan PIN yang dimasukkan dengan PIN yang benar
     Serial.println("\nPIN Benar! Membuka Brankas");
     lockServo.write(90); // Posisi untuk membuka brankas (sesuaikan dengan kebutuhan)
-    delay(2000); // Waktu untuk membuka brankas (sesuaikan dengan kebutuhan)
-    lockServo.write(0); // Kembali ke posisi awal setelah membuka
   } else {
     Serial.println("\nPIN Salah! Brankas Tetap Tertutup");
   }
