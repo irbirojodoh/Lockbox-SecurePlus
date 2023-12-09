@@ -128,7 +128,7 @@ byte colPins[ROWS] = { 33, 25, 26, 14 };
 Keypad keypad = Keypad(makeKeymap(keys), colPins, rowPins, COLS, ROWS);
 
 // Pin untuk mengendalikan servo
-const int servoPin = 3;  // Ganti dengan pin yang terhubung ke servo
+const int servoPin = 4;  // Ganti dengan pin yang terhubung ke servo
 
 Servo lockServo;  // Objek untuk mengendalikan servo
 
@@ -180,7 +180,7 @@ void checkPIN() {
     lockServo.write(90); // Posisi untuk membuka brankas (sesuaikan dengan kebutuhan)
   } else {
     Serial.println("\nPIN Salah! Brankas Tetap Tertutup");
-    digitalWrite(buzzerPin, HIGH);
+    beep();
           //mengirim pesan ke esp cam
       strcpy(myData.a, "/photo");
       esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
@@ -192,10 +192,31 @@ void checkPIN() {
   memset(enteredPIN, 0, sizeof(enteredPIN));
 }
 
+void beep(){
+      vTaskDelay(100/portTICK_PERIOD_MS);
+
+  digitalWrite(buzzerPin, LOW);
+  vTaskDelay(100/portTICK_PERIOD_MS);
+  digitalWrite(buzzerPin, HIGH);
+  vTaskDelay(100/portTICK_PERIOD_MS);
+    digitalWrite(buzzerPin, LOW);
+  vTaskDelay(100/portTICK_PERIOD_MS);
+  digitalWrite(buzzerPin, HIGH);
+  vTaskDelay(100/portTICK_PERIOD_MS);
+    digitalWrite(buzzerPin, LOW);
+  vTaskDelay(100/portTICK_PERIOD_MS);
+  digitalWrite(buzzerPin, HIGH);
+    vTaskDelay(100/portTICK_PERIOD_MS);
+    digitalWrite(buzzerPin, LOW);
+  vTaskDelay(100/portTICK_PERIOD_MS);
+  digitalWrite(buzzerPin, HIGH);
+
+}
+
 void returnServoToInitialPosition() {
   Serial.println("\nKembali ke posisi awal / Menutup Brankas");
-  lockServo.write(0); // Posisi untuk menutup brankas (sesuaikan dengan kebutuhan)
-  delay(2000); // Waktu untuk menutup brankas (sesuaikan dengan kebutuhan)
+  lockServo.write(90); // Posisi untuk menutup brankas (sesuaikan dengan kebutuhan)
+  //delay(2000); // Waktu untuk menutup brankas (sesuaikan dengan kebutuhan)
 }
 
 //*********************************************SETUP KEYPAD**********************************//
@@ -264,8 +285,7 @@ void setup() {
 
   // Init Serial Monitor
     lockServo.attach(servoPin); // Menghubungkan servo ke pin yang ditentukan
-  lockServo.write(0); // Posisi awal servo (sesuaikan dengan kebutuhan)
-  
+//returnServoToInitialPosition();  
   Serial.println("Sistem Brankas");
   
   xTaskCreatePinnedToCore(
