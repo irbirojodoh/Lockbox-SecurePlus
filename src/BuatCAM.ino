@@ -1,3 +1,4 @@
+// Include necessary libraries
 #include <esp_now.h>
 #include <WiFi.h>
 #include <Arduino.h>
@@ -7,12 +8,14 @@
 #include "esp_camera.h"
 #include <UniversalTelegramBot.h>
 #include <ArduinoJson.h>
+#include <WiFiManager.h>
 
 //****************************SETUP ESP NOW*****************************//
 // Structure example to receive data
 // Must match the sender structure
 bool sendPhoto = false;
 
+// Define a structure to hold the incoming data
 typedef struct struct_message {
   char a[32];
 
@@ -24,20 +27,16 @@ struct_message myData;
 // callback function that will be executed when data is received
 void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
   Serial.println("MALINGG");
+  // Set sendPhoto to true when data is received
   sendPhoto = true;
-  // Serial.print("Int: ");
-  // Serial.println(myData.b);
-  // Serial.print("Float: ");
-  // Serial.println(myData.c);
-  // Serial.print("Bool: ");
-  // Serial.println(myData.d);
-  // Serial.println();
+
 }
 //*****************SETUP ESP NOW******************************//
 
 //************************SETUP ESPCAM************************//
-const char* ssid = "HP Dio";
-const char* password = "emangBoleh21";
+// Wi-Fi credentials for connecting to the network
+const char* ssid = "Bism";
+const char* password = "bisma123x";
 // Initialize Telegram BOT
 String BOTtoken = "6637028332:AAGmRfHGaSg3uz50H9H4WL6ZCDT93wrDYPE";  // your Bot Token (Get from Botfather)
 
@@ -50,14 +49,15 @@ String CHAT_ID = "1258977110";
 WiFiClientSecure clientTCP;
 UniversalTelegramBot bot(BOTtoken, clientTCP);
 
+// GPIO pin for controlling flash LED
 #define FLASH_LED_PIN 4
 bool flashState = LOW;
 
-//Checks for new messages every 1 second.
+// Interval for checking new messages from Telegram (in milliseconds) every 1 second.
 int botRequestDelay = 1000;
 unsigned long lastTimeBotRan;
 
-//CAMERA_MODEL_AI_THINKER
+//DEFINE PIN FOR CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM 32
 #define RESET_GPIO_NUM -1
 #define XCLK_GPIO_NUM 0
@@ -76,8 +76,9 @@ unsigned long lastTimeBotRan;
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
 
-
+// Initialize ESP32-CAM camera configuration
 void configInitCamera() {
+  // Camera configuration structure
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -124,6 +125,7 @@ void configInitCamera() {
   s->set_framesize(s, FRAMESIZE_CIF);  // UXGA|SXGA|XGA|SVGA|VGA|CIF|QVGA|HQVGA|QQVGA
 }
 
+// Handle new messages received from Telegram
 void handleNewMessages(int numNewMessages) {
   Serial.print("Handle New Messages: ");
   Serial.println(numNewMessages);
@@ -135,7 +137,7 @@ void handleNewMessages(int numNewMessages) {
       continue;
     }
 
-    // Print the received message
+    // Process the received message and Print the received message
     String text = myData.a;
     Serial.println(text);
 
@@ -159,11 +161,14 @@ void handleNewMessages(int numNewMessages) {
   }
 }
 
+// Send captured photo to Telegram
 String sendPhotoTelegram() {
+  // Telegram API details
   const char* myDomain = "api.telegram.org";
   String getAll = "";
   String getBody = "";
 
+  // Capture a photo from the camera
   camera_fb_t* fb = NULL;
   fb = esp_camera_fb_get();
   if (!fb) {
@@ -173,19 +178,20 @@ String sendPhotoTelegram() {
     return "Camera capture failed";
   }
 
+  // Establish connection with Telegram API server
   Serial.println("Connect to " + String(myDomain));
 
-
+  
   if (clientTCP.connect(myDomain, 443)) {
     Serial.println("Connection successful");
-
+    // Prepare the HTTP request headers and body for sending the photo
     String head = "--RandomNerdTutorials\r\nContent-Disposition: form-data; name=\"chat_id\"; \r\n\r\n" + CHAT_ID + "\r\n--RandomNerdTutorials\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"esp32-cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
     String tail = "\r\n--RandomNerdTutorials--\r\n";
-
+    // Calculate the total length of the HTTP request
     uint16_t imageLen = fb->len;
     uint16_t extraLen = head.length() + tail.length();
     uint16_t totalLen = imageLen + extraLen;
-
+    // Send the HTTP POST request to Telegram API
     clientTCP.println("POST /bot" + BOTtoken + "/sendPhoto HTTP/1.1");
     clientTCP.println("Host: " + String(myDomain));
     clientTCP.println("Content-Length: " + String(totalLen));
@@ -193,6 +199,7 @@ String sendPhotoTelegram() {
     clientTCP.println();
     clientTCP.print(head);
 
+    // Send the image data in chunks
     uint8_t* fbBuf = fb->buf;
     size_t fbLen = fb->len;
     for (size_t n = 0; n < fbLen; n = n + 1024) {
@@ -205,14 +212,18 @@ String sendPhotoTelegram() {
       }
     }
 
+    // Send the request tail
     clientTCP.print(tail);
 
+    // Release the camera buffer
     esp_camera_fb_return(fb);
 
-    int waitTime = 10000;  // timeout 10 seconds
+    // Wait for the server's response
+    int waitTime = 10000;  // Timeout 10 seconds
     long startTimer = millis();
     boolean state = false;
 
+    // Read the response from the server
     while ((startTimer + waitTime) > millis()) {
       Serial.print(".");
       delay(100);
@@ -228,6 +239,7 @@ String sendPhotoTelegram() {
       }
       if (getBody.length() > 0) break;
     }
+    // Close the TCP connection
     clientTCP.stop();
     Serial.println(getBody);
   } else {
@@ -238,12 +250,17 @@ String sendPhotoTelegram() {
 }
 
 
+// Setup function, called once on startup
 void setup() {
   // Initialize Serial Monitor
   Serial.begin(115200);
-
+  
   // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
+    WiFi.mode(WIFI_STA);
+   WiFiManager wm;
+   wm.resetSettings();
+  // Start the Wi-Fi manager to handle Wi-Fi connection
+  wm.autoConnect("ESPDAPPA","password");
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -252,13 +269,12 @@ void setup() {
   }
 
   // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info
+  // Register the callback function for receiving ESP-NOW data
   esp_now_register_recv_cb(OnDataRecv);
 
   //*********************************ESPCAM********************************//
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   // Init Serial Monitor
-  Serial.begin(115200);
 
   // Set LED Flash as output
   pinMode(FLASH_LED_PIN, OUTPUT);
@@ -267,12 +283,7 @@ void setup() {
   // Config and init the camera
   configInitCamera();
 
-  // Connect to Wi-Fi
-  WiFi.mode(WIFI_STA);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
+ // Connect to Wi-Fi
   clientTCP.setCACert(TELEGRAM_CERTIFICATE_ROOT);  // Add root certificate for api.telegram.org
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
@@ -283,12 +294,16 @@ void setup() {
   Serial.println(WiFi.localIP());
 }
 
+// Main loop function, continuously executed
 void loop() {
+  // Check if a new photo request is received
   if (sendPhoto) {
     Serial.println("Preparing photo");
+    bot.sendMessage(CHAT_ID, "ADA YANG MENCOBA BUKA BRANKAS");
     sendPhotoTelegram();
     sendPhoto = false;
   }
+  // Check for new messages from Telegram
   if (millis() > lastTimeBotRan + botRequestDelay) {
     int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
     while (numNewMessages) {
