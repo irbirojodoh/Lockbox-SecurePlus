@@ -7,6 +7,7 @@
 #include "esp_camera.h"
 #include <UniversalTelegramBot.h>
 #include <ArduinoJson.h>
+#include <WiFiManager.h>
 
 //****************************SETUP ESP NOW*****************************//
 // Structure example to receive data
@@ -36,8 +37,8 @@ void OnDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
 //*****************SETUP ESP NOW******************************//
 
 //************************SETUP ESPCAM************************//
-const char* ssid = "HP Dio";
-const char* password = "emangBoleh21";
+const char* ssid = "Bism";
+const char* password = "bisma123x";
 // Initialize Telegram BOT
 String BOTtoken = "6637028332:AAGmRfHGaSg3uz50H9H4WL6ZCDT93wrDYPE";  // your Bot Token (Get from Botfather)
 
@@ -241,9 +242,14 @@ String sendPhotoTelegram() {
 void setup() {
   // Initialize Serial Monitor
   Serial.begin(115200);
+  
+ 
 
   // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
+    WiFi.mode(WIFI_STA);
+   WiFiManager wm;
+   wm.resetSettings();
+  wm.autoConnect("ESPDAPPA","password");
 
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -258,7 +264,6 @@ void setup() {
   //*********************************ESPCAM********************************//
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   // Init Serial Monitor
-  Serial.begin(115200);
 
   // Set LED Flash as output
   pinMode(FLASH_LED_PIN, OUTPUT);
@@ -268,11 +273,13 @@ void setup() {
   configInitCamera();
 
   // Connect to Wi-Fi
-  WiFi.mode(WIFI_STA);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
+  // WiFi.mode(WIFI_STA);
+  // Serial.println();
+  // Serial.print("Connecting to ");
+  // Serial.println(ssid);
+  // WiFi.begin(ssid, password);
+
+ 
   clientTCP.setCACert(TELEGRAM_CERTIFICATE_ROOT);  // Add root certificate for api.telegram.org
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
@@ -286,6 +293,7 @@ void setup() {
 void loop() {
   if (sendPhoto) {
     Serial.println("Preparing photo");
+    bot.sendMessage(CHAT_ID, "ADA YANG MENCOBA BUKA BRANKAS");
     sendPhotoTelegram();
     sendPhoto = false;
   }
