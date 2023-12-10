@@ -23,6 +23,11 @@ struct_message myData;
 
 esp_now_peer_info_t peerInfo;
 
+void checkPIN();
+void beep(int count, int delayOn, int delayOff);
+void returnServoToInitialPosition();
+
+
 // callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.print("\r\nLast Packet Send Status:\t");
@@ -37,8 +42,6 @@ MPU6050 mpu;
 const int buzzerPin = 13;  // Adjust the pin according to your setup
 const int buttonPin = 5;
 const int solenoidPin = 4;
-const float motionThresholdLow = 0.70;  // Adjust the threshold based on your requirements
-const float motionThresholdHigh = 0.5;  // Adjust the threshold based on your requirements
 const int freq = 500;
 
 void initMPU6050() {
@@ -46,68 +49,61 @@ void initMPU6050() {
   mpu.initialize();
 }
 
-void toggleBuzzer() {
-  digitalWrite(buzzerPin, !digitalRead(buzzerPin));
-}
 
-void solenoidTask(void *pvParameters) {
-  for (;;) {
-    if (digitalRead(buttonPin) == LOW) {
-      digitalWrite(solenoidPin, 1);
-      //servo.write(0);
-      vTaskDelay(3000 / portTICK_PERIOD_MS);
-      digitalWrite(solenoidPin, 0);
-      // servo.write(90);
-      Serial.println("Button pressed");
-    }
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-  }
-}
-
+/**
+ * @brief Task function for motion detection.
+ *
+ * This function is responsible for detecting motion and performing related actions.
+ *
+ * @param pvParameters Pointer to task parameters (not used in this function).
+ */
 void motionDetectionTask(void *pvParameters) {
-  float motionMag = 10;
+  float threshold = 1.2;
   for (;;) {
-    // Read accelerometer data
-    int16_t ax, ay, az;
-    mpu.getAcceleration(&ax, &ay, &az);
-    // Convert to floating-point
-    float ax_f = static_cast<float>(ax);
-    float ay_f = static_cast<float>(ay);
-    float az_f = static_cast<float>(az);
+    int16_t ax1, ay1, az1, ax2, ay2, az2;
 
-    // Serial.printf("ax: %f, ay: %f, az: %f\n", ax_f / 16384.0f - 1, ay_f / 16384.0f, az_f / 16384.0f);
+    //Gets the initial acceleration
+    mpu.getAcceleration(&ax1, &ay1, &az1);
+    float ax1_f = static_cast<float>(ax1) / 16384.0;;
+    float ay1_f = static_cast<float>(ay1)/ 16384.0;;
+    float az1_f = static_cast<float>(az1)/ 16384.0;;
 
-    // Calculate magnitude
-    float motionMag = sqrt(pow(fabs(ax_f) / 16384.0f - 1, 2) + pow(fabs(ay_f) / 16384.0f, 2) + pow(fabs(az_f) / 16384.0f, 2));
-    // Serial.println(motionMag);
+    vTaskDelay(40 / portTICK_PERIOD_MS);
 
-    // Check if motion is detected
-    if (motionMag > motionThresholdHigh) {
+    //Gets the final acceleration
+    mpu.getAcceleration(&ax2, &ay2, &az2);
+    float ax2_f = static_cast<float>(ax2)/ 16384.0;;
+    float ay2_f = static_cast<float>(ay2)/ 16384.0;;
+    float az2_f = static_cast<float>(az2)/ 16384.0;;
+
+    //Calculates the jerk
+    float jerkX = ax2_f - ax1_f;
+    float jerkY = ay2_f - ay1_f;
+    float jerkZ = az2_f - az1_f;
+
+    //Calculates the magnitude of the jerk
+    float jerkMag = sqrt(pow(jerkX, 2) + pow(jerkY, 2) + pow(jerkZ, 2));
+    Serial.println(jerkMag);
+
+
+    if (jerkMag>threshold) {
       Serial.println("Motion Detected");
-      //Serial.println(motionMag);
+  
+      digitalWrite(buzzerPin, HIGH); 
 
-      // Play buzzer
-      // digitalWrite(buzzerPin, HIGH); // Adjust frequency and duration based on your preference
-
-      // Add any additional actions you want to perform when motion is detected
       Serial.println("gherak bos");
       digitalWrite(buzzerPin, LOW);
-      //mengirim pesan ke esp cam
       strcpy(myData.a, "/photo");
       esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
-
-
-      delay(1000);  // Delay to avoid repeated detections
+      beep(300,45, 15);
     } else {
       digitalWrite(buzzerPin, HIGH);
     }
-    // digitalWrite(buzzerPin, LOW);
 
-    vTaskDelay(250 / portTICK_PERIOD_MS);  // Adjust the delay based on your requirements
-  }
+    vTaskDelay(250 / portTICK_PERIOD_MS); 
+}
 }
 
-//********************************SETUP BUZZER************************************************************///
 
 //********************************SETUP KEYPAD************************************************************//
 
@@ -141,6 +137,11 @@ int pinIndex = 0;    // Variabel untuk melacak indeks PIN yang dimasukkan
 TaskHandle_t keypadTaskHandle;
 
 //***************KEYPAD SETUP*****************************************************//
+/**
+ * @brief This function is a task that checks the PIN for the Brankas IoT project.
+ *
+ * @param parameter A pointer to the task parameter.
+ */
 void checkPINTask(void * parameter) {
   Serial.println("Silahkan Masukkan PIN");
   for (;;) {
@@ -168,19 +169,26 @@ void checkPINTask(void * parameter) {
   }
 }
 
+/**
+ * @brief Checks the PIN entered by the user.
+ * 
+ * This function is responsible for verifying the PIN entered by the user
+ * and performing the necessary actions based on the result.
+ */
 void checkPIN() {
   enteredPIN[pinIndex] = '\0'; // Menambahkan null terminator ke akhir PIN
   
   // Verifikasi PIN
   if (strcmp(enteredPIN, correctPIN) == 0) { // Membandingkan PIN yang dimasukkan dengan PIN yang benar
     Serial.println("\nPIN Benar! Membuka Brankas");
+    lockServo.write(10); // Posisi untuk membuka brankas (sesuaikan dengan kebutuhan)
+
     //mengirim pesan ke esp cam
     strcpy(myData.a, "/photo");
     esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
-    lockServo.write(90); // Posisi untuk membuka brankas (sesuaikan dengan kebutuhan)
   } else {
     Serial.println("\nPIN Salah! Brankas Tetap Tertutup");
-    beep();
+    beep(4,100,100);
           //mengirim pesan ke esp cam
       strcpy(myData.a, "/photo");
       esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
@@ -192,38 +200,42 @@ void checkPIN() {
   memset(enteredPIN, 0, sizeof(enteredPIN));
 }
 
-void beep(){
-      vTaskDelay(100/portTICK_PERIOD_MS);
 
-  digitalWrite(buzzerPin, LOW);
-  vTaskDelay(100/portTICK_PERIOD_MS);
-  digitalWrite(buzzerPin, HIGH);
-  vTaskDelay(100/portTICK_PERIOD_MS);
+/**
+ * @brief Produces a beep sound.
+ * 
+ * This function is responsible for producing a beep sound.
+ * It can be used to indicate a certain event or condition.
+ */
+void beep(int count, int delayOn, int delayOff) {
+  for (int i = 0; i < count; ++i) {
     digitalWrite(buzzerPin, LOW);
-  vTaskDelay(100/portTICK_PERIOD_MS);
-  digitalWrite(buzzerPin, HIGH);
-  vTaskDelay(100/portTICK_PERIOD_MS);
-    digitalWrite(buzzerPin, LOW);
-  vTaskDelay(100/portTICK_PERIOD_MS);
-  digitalWrite(buzzerPin, HIGH);
-    vTaskDelay(100/portTICK_PERIOD_MS);
-    digitalWrite(buzzerPin, LOW);
-  vTaskDelay(100/portTICK_PERIOD_MS);
-  digitalWrite(buzzerPin, HIGH);
-
+    vTaskDelay(delayOn / portTICK_PERIOD_MS);
+    digitalWrite(buzzerPin, HIGH);
+    vTaskDelay(delayOff / portTICK_PERIOD_MS);
+  }
 }
 
+
+/**
+ * Returns the servo to its initial position.
+ */
 void returnServoToInitialPosition() {
   Serial.println("\nKembali ke posisi awal / Menutup Brankas");
-  lockServo.write(90); // Posisi untuk menutup brankas (sesuaikan dengan kebutuhan)
-  //delay(2000); // Waktu untuk menutup brankas (sesuaikan dengan kebutuhan)
+  lockServo.write(90);
+
 }
 
-//*********************************************SETUP KEYPAD**********************************//
+//*********************************SSETUP************************************************************//
+
 
 void setup() {
+
   Serial.begin(9600);
   Serial.println("Starting...");
+
+    Serial.print("ESP Board MAC Address:  ");
+  Serial.println(WiFi.macAddress());
     // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
 
@@ -256,6 +268,9 @@ void setup() {
 
   // Initialize MPU6050
   initMPU6050();
+  lockServo.attach(servoPin); // Menghubungkan servo ke pin yang ditentukan
+  lockServo.write(90); // Posisi awal servo (sesuaikan dengan kebutuhan)
+
 
   if (mpu.testConnection()) {
     Serial.println("MPU6050 connection successful");
@@ -284,8 +299,7 @@ void setup() {
     0);
 
   // Init Serial Monitor
-    lockServo.attach(servoPin); // Menghubungkan servo ke pin yang ditentukan
-//returnServoToInitialPosition();  
+  returnServoToInitialPosition();  
   Serial.println("Sistem Brankas");
   
   xTaskCreatePinnedToCore(
