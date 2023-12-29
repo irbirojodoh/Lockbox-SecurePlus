@@ -21,6 +21,9 @@ typedef struct struct_message {
 // Create a struct_message called myData
 struct_message myData;
 
+SemaphoreHandle_t mutex; // Declare a mutex
+
+
 esp_now_peer_info_t peerInfo;
 
 void checkPIN();
@@ -87,6 +90,7 @@ void motionDetectionTask(void *pvParameters) {
 
 
     if (jerkMag>threshold) {
+      xSemaphoreTake(mutex, portMAX_DELAY)
       Serial.println("Motion Detected");
   
       digitalWrite(buzzerPin, HIGH); 
@@ -96,6 +100,8 @@ void motionDetectionTask(void *pvParameters) {
       strcpy(myData.a, "/photo");
       esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&myData, sizeof(myData));
       beep(300,45, 15);
+      xSemaphoreGive(mutex);
+
     } else {
       digitalWrite(buzzerPin, HIGH);
     }
@@ -143,29 +149,32 @@ TaskHandle_t keypadTaskHandle;
  * @param parameter A pointer to the task parameter.
  */
 void checkPINTask(void * parameter) {
-  Serial.println("Silahkan Masukkan PIN");
-  for (;;) {
-    vTaskDelay(100); // Menunggu 100ms sebelum membaca keypad lagi
-    
-    char key = keypad.getKey();
-  
-    if (key != NO_KEY) {
-      Serial.println(key); // Menampilkan tombol yang ditekan
+  if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) {
+    Serial.println("Silahkan Masukkan PIN");
+    for (;;) {
+      vTaskDelay(100); // Menunggu 100ms sebelum membaca keypad lagi
       
-      // Memeriksa apakah tombol yang ditekan adalah digit (0-9)
-      if (isdigit(key)) {
-        enteredPIN[pinIndex++] = key; // Menyimpan karakter PIN yang dimasukkan
-        Serial.print("PIN yang dimasukkan: ");
-        Serial.println(enteredPIN);
+      char key = keypad.getKey();
+    
+      if (key != NO_KEY) {
+        Serial.println(key); // Menampilkan tombol yang ditekan
         
-        // Jika sudah dimasukkan 4 karakter (PIN), verifikasi PIN
-        if (pinIndex == 4) {
-          checkPIN();
+        // Memeriksa apakah tombol yang ditekan adalah digit (0-9)
+        if (isdigit(key)) {
+          enteredPIN[pinIndex++] = key; // Menyimpan karakter PIN yang dimasukkan
+          Serial.print("PIN yang dimasukkan: ");
+          Serial.println(enteredPIN);
+          
+          // Jika sudah dimasukkan 4 karakter (PIN), verifikasi PIN
+          if (pinIndex == 4) {
+            checkPIN();
+          }
+        } else if (key == 'C') {
+          returnServoToInitialPosition();
         }
-      } else if (key == 'C') {
-        returnServoToInitialPosition();
       }
     }
+       xSemaphoreGive(mutex);
   }
 }
 
